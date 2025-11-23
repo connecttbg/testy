@@ -223,9 +223,12 @@ def layout(title, body):
 
 # --- Auth ---
 @app.route("/", methods=["GET", "POST"])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
+def index():
+    # strona główna korzysta z tego samego formularza logowania
+    return login()
+
+
+
 
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -1235,9 +1238,12 @@ def layout(title, body):
 
 # --- Auth ---
 @app.route("/", methods=["GET", "POST"])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
+def index():
+    # strona główna korzysta z tego samego formularza logowania
+    return login()
+
+
+
 
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
