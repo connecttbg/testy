@@ -17,7 +17,7 @@ from sqlalchemy import text as sql_text, and_
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = os.getenv("SECRET_KEY", "dev-key-change-me")
 
-DB_FILE = "/var/data/app.db" if os.path.exists("/var/data") else "app.db"
+DB_FILE = "app.db"
 APP_VERSION = "v1.2"
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_FILE}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
