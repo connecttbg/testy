@@ -14,12 +14,10 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import text as sql_text, and_
 
 # --- Flask & DB config ---
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_FILE = os.path.join(BASE_DIR, "app.db")
-
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = os.getenv("SECRET_KEY", "dev-key-change-me")
 
+DB_FILE = "/var/data/app.db" if os.path.exists("/var/data") else "app.db"
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_FILE}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -222,49 +220,7 @@ def layout(title, body):
 
 
 # --- Auth ---
-@app.route("/", methods=["GET", "POST"])
-def index():
-    # strona główna korzysta z tego samego formularza logowania
-    return login()
 
-
-
-
-    if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
-        pw = request.form.get("password", "")
-        user = User.query.filter_by(email=email).first()
-        if user and user.check_password(pw) and user.is_active:
-            login_user(user)
-            return redirect(url_for("dashboard"))
-        flash("Nieprawidłowy login lub hasło albo konto nieaktywne.")
-        return redirect(url_for("login"))
-
-    body = render_template_string("""
-<div class="row justify-content-center">
-  <div class="col-md-5">
-    <div class="text-center mb-3">
-      <img src="{{ url_for('static', filename='ekko_logo.png') }}" class="brand-big" alt="logo">
-      <h4 class="mb-0">EKKO NOR AS</h4>
-      <div class="text-muted">Rejestrator czasu pracy</div>
-    </div>
-    <div class="card p-3">
-      <form method="post">
-        <div class="mb-3">
-          <label class="form-label">E-mail</label>
-          <input class="form-control" type="email" name="email" placeholder="np. imie@firma.no" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Hasło</label>
-          <input class="form-control" type="password" name="password" required>
-        </div>
-        <button class="btn btn-primary w-100">Zaloguj</button>
-      </form>
-    </div>
-  </div>
-</div>
-""")
-    return layout("Logowanie", body)
 
 
 @app.route("/logout")
@@ -1173,27 +1129,23 @@ def admin_backup_restore_saved(fname):
 
 
 # --- Reports (with Excel export) ---
-
 @app.route("/admin/reports", methods=["GET"])
 @login_required
+
 def admin_reports():
     require_admin()
-    # bierzemy wszystkie wpisy bez filtrowania po dacie
+    # prosty raport wszystkich wpisów
     rows = (
         db.session.query(Entry, User, Project)
         .join(User, Entry.user_id == User.id)
         .join(Project, Entry.project_id == Project.id)
-        .order_by(Entry.work_date.desc(), User.name.asc(), Project.name.asc())
+        .order_by(Entry.work_date.desc(), Entry.id.desc())
         .all()
     )
-
     body = render_template_string("""
 <div class="card p-3">
-  <h5 class="mb-3">Raport wszystkich wpisów (bez filtrowania)</h5>
-  <p class="small text-muted">
-    Łącznie rekordów: {{ rows|length }}
-  </p>
-
+  <h5 class="mb-3">Raport wszystkich wpisów</h5>
+  <p class="small text-muted">Łącznie rekordów: {{ rows|length }}</p>
   {% if rows %}
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
@@ -1224,62 +1176,18 @@ def admin_reports():
       </table>
     </div>
   {% else %}
-    <div class="text-muted">Brak wpisów w bazie.</div>
+    <div class="text-muted">Brak wpisów.</div>
   {% endif %}
 </div>
     """, rows=rows, fmt=fmt_hhmm)
-
-    return layout("Raport wszystkich wpisów", body)
-
+    return layout("Raport", body)
 
 def layout(title, body):
     return render_template_string(BASE, title=title, body=body, fmt=fmt_hhmm)
 
 
 # --- Auth ---
-@app.route("/", methods=["GET", "POST"])
-def index():
-    # strona główna korzysta z tego samego formularza logowania
-    return login()
 
-
-
-
-    if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
-        pw = request.form.get("password", "")
-        user = User.query.filter_by(email=email).first()
-        if user and user.check_password(pw) and user.is_active:
-            login_user(user)
-            return redirect(url_for("dashboard"))
-        flash("Nieprawidłowy login lub hasło albo konto nieaktywne.")
-        return redirect(url_for("login"))
-
-    body = render_template_string("""
-<div class="row justify-content-center">
-  <div class="col-md-5">
-    <div class="text-center mb-3">
-      <img src="{{ url_for('static', filename='ekko_logo.png') }}" class="brand-big" alt="logo">
-      <h4 class="mb-0">EKKO NOR AS</h4>
-      <div class="text-muted">Rejestrator czasu pracy</div>
-    </div>
-    <div class="card p-3">
-      <form method="post">
-        <div class="mb-3">
-          <label class="form-label">E-mail</label>
-          <input class="form-control" type="email" name="email" placeholder="np. imie@firma.no" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Hasło</label>
-          <input class="form-control" type="password" name="password" required>
-        </div>
-        <button class="btn btn-primary w-100">Zaloguj</button>
-      </form>
-    </div>
-  </div>
-</div>
-""")
-    return layout("Logowanie", body)
 
 
 @app.route("/logout")
