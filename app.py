@@ -1170,88 +1170,64 @@ def admin_backup_restore_saved(fname):
 
 
 # --- Reports (with Excel export) ---
+
 @app.route("/admin/reports", methods=["GET"])
 @login_required
 def admin_reports():
     require_admin()
-    d_from = request.args.get("from")
-    d_to = request.args.get("to")
-    user_id = request.args.get("user_id")
-    project_id = request.args.get("project_id")
-    users = User.query.order_by(User.name).all()
-    projects = Project.query.order_by(Project.name).all()
-    rows = []
-    if d_from and d_to:
-        d_from_dt = datetime.strptime(d_from, "%Y-%m-%d").date()
-        d_to_dt = datetime.strptime(d_to, "%Y-%m-%d").date()
-        q = Entry.query.join(User).join(Project).filter(
-            Entry.work_date >= d_from_dt,
-            Entry.work_date <= d_to_dt
-        )
-        if user_id and user_id != "all":
-            q = q.filter(Entry.user_id == int(user_id))
-        if project_id and project_id != "all":
-            q = q.filter(Entry.project_id == int(project_id))
-        rows = q.order_by(Entry.work_date.asc(), Entry.id.asc()).all()
+    # bierzemy wszystkie wpisy bez filtrowania po dacie
+    rows = (
+        db.session.query(Entry, User, Project)
+        .join(User, Entry.user_id == User.id)
+        .join(Project, Entry.project_id == Project.id)
+        .order_by(Entry.work_date.desc(), User.name.asc(), Project.name.asc())
+        .all()
+    )
+
     body = render_template_string("""
 <div class="card p-3">
-  <h5 class="mb-3">Raport</h5>
-  <form class="row g-2 mb-3" method="get">
-    <div class="col-md-3">
-      <label class="form-label">Od</label>
-      <input class="form-control" type="date" name="from" value="{{ request.args.get('from','') }}" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Do</label>
-      <input class="form-control" type="date" name="to" value="{{ request.args.get('to','') }}" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Pracownik</label>
-      <select class="form-select" name="user_id">
-        <option value="all">Wszyscy</option>
-        {% for u in users %}
-          <option value="{{ u.id }}" {% if request.args.get('user_id')|int == u.id %}selected{% endif %}>{{ u.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Projekt</label>
-      <select class="form-select" name="project_id">
-        <option value="all">Wszystkie</option>
-        {% for p in projects %}
-          <option value="{{ p.id }}" {% if request.args.get('project_id')|int == p.id %}selected{% endif %}>{{ p.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-12 d-flex gap-2">
-      <button class="btn btn-primary">Pokaż</button>
-      {% if rows %}
-        <a class="btn btn-success" href="{{ url_for('admin_reports_export', from=request.args.get('from'), to=request.args.get('to'), user_id=request.args.get('user_id','all'), project_id=request.args.get('project_id','all')) }}">Eksport do Excel</a>
-      {% endif %}
-    </div>
-  </form>
+  <h5 class="mb-3">Raport wszystkich wpisów (bez filtrowania)</h5>
+  <p class="small text-muted">
+    Łącznie rekordów: {{ rows|length }}
+  </p>
+
   {% if rows %}
-  <div class="table-responsive">
-    <table class="table table-sm align-middle">
-      <thead><tr><th>Data</th><th>Pracownik</th><th>Projekt</th><th>Godziny</th><th>Extra</th><th>OT</th><th>Notatka</th></tr></thead>
-      <tbody>
-      {% for it in rows %}
-        <tr>
-          <td>{{ it.work_date.isoformat() }}</td>
-          <td>{{ it.user.name }}</td>
-          <td>{{ it.project.name }}</td>
-          <td>{{ fmt(it.minutes) }}</td>
-          <td>{% if it.is_extra %}✔{% else %}-{% endif %}</td>
-          <td>{% if it.is_overtime %}✔{% else %}-{% endif %}</td>
-          <td>{{ it.note or '' }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Pracownik</th>
+            <th>Projekt</th>
+            <th>Godziny</th>
+            <th>Extra</th>
+            <th>Nadgodziny</th>
+            <th>Notatka</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for entry, user, project in rows %}
+          <tr>
+            <td>{{ entry.work_date }}</td>
+            <td>{{ user.name }}</td>
+            <td>{{ project.name }}</td>
+            <td>{{ fmt(entry.minutes) }}</td>
+            <td>{% if entry.is_extra %}tak{% else %}-{% endif %}</td>
+            <td>{% if entry.is_overtime %}tak{% else %}-{% endif %}</td>
+            <td>{{ entry.note }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="text-muted">Brak wpisów w bazie.</div>
   {% endif %}
 </div>
-"""
+    """, rows=rows, fmt=fmt_hhmm)
+
+    return layout("Raport wszystkich wpisów", body)
+
 
 def layout(title, body):
     return render_template_string(BASE, title=title, body=body, fmt=fmt_hhmm)
